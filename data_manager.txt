@@ -1,0 +1,55 @@
+import os
+import pandas as pd
+from data_cleansing import DataCleansing
+from text_classification import TextClassification
+import random
+import numpy as np
+os.environ['PYTHONHASHSEED'] = '1'
+np.random.seed(1)
+random.seed(1)
+
+
+class DataManager:
+    def __init__(self, dataset_path, log=print):
+        self.dataset_path = dataset_path
+        self.csv_path = os.path.join(self.dataset_path, 'training.1600000.processed.noemoticon.csv')
+        self.columns = ["Sentiment", "Id", "DataTime", "Flag", "UserName", "Tweet"]
+        self.unwanted_cols = ['Id', 'DateTime', 'Flag', 'UserName']
+        self.required_cols = ['Tweet', 'Sentiment']
+        self.log = log
+        self.encoding = "ISO-8859-1"
+        self.dataframe = pd.DataFrame()
+        self.class_dict = {0: 'Negative', 4: 'Positive'}
+
+    def load_dataset(self):
+        self.log('[INFO] Loading Dataset')
+        self.dataframe = pd.read_csv(self.csv_path, names=self.columns, encoding=self.encoding)
+
+    def analyze_data(self):
+        self.log('[INFO] Exploring Dataset')
+        self.log('[INFO] Rows Count :: {0}'.format(self.dataframe.shape[0]))
+        self.log('[INFO] Columns Count :: {0}'.format(self.dataframe.shape[1]))
+        self.log('[INFO] Removing unwanted columns')
+        self.log('\n'.join(['\t {0}'.format(c) for c in self.unwanted_cols]))
+        self.dataframe = self.dataframe[self.required_cols]
+        self.log('[INFO] Checking Null Values')
+        if not self.dataframe.isnull().sum().all():
+            self.log('[INFO] No Null Values Found In Dataset')
+        self.log('[INFO] Shuffling Dataset')
+        self.dataframe = self.dataframe.sample(frac=1)
+        self.dataframe = self.dataframe.head(2000)
+        self.dataframe['Sentiment'].replace(to_replace=self.class_dict, inplace=True)
+        for k, v in self.dataframe['Sentiment'].value_counts().to_dict().items():
+            self.log('[INFO] {0} Tweets:: {1}'.format(k, v))
+
+
+if __name__ == '__main__':
+    dm = DataManager('data/trainingandtestdata')
+    dm.load_dataset()
+    dm.analyze_data()
+    dc = DataCleansing(dm.dataframe, dm.required_cols[0], dm.log)
+    dc.cleansing_text()
+    tc = TextClassification(dc.dataframe, dm.required_cols, dc.log)
+    tc.split_train_test_data()
+    tc.train_classifier()
+    tc.evaluate()
